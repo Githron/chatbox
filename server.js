@@ -18,11 +18,6 @@ const PORT = process.env.PORT || 3000;
 app.use(express.static(path.join(__dirname, 'public')));
 
 // In-memory data store for active rooms
-// Format:
-// rooms[roomCode] = {
-//   users: Map(socket.id -> { username, color }),
-//   messages: Array<{ id, username, text, timestamp, color, system }>
-// }
 const rooms = new Map();
 
 // Helper to generate pastel user color based on username
@@ -92,12 +87,12 @@ io.on('connection', (socket) => {
     socket.userRoomInfo = { roomCode: cleanRoomCode, username: cleanUsername, color: userColor };
     room.users.set(socket.id, { username: cleanUsername, color: userColor });
 
-    // Create a system join message
+    // Create a system join message (timestamp generated on client or via ISO)
     const joinMessage = {
       id: Date.now().toString() + Math.random().toString(36).substr(2, 4),
       system: true,
       text: `${cleanUsername} joined the room`,
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      timestamp: new Date().toISOString()
     };
 
     // Store in message history
@@ -141,7 +136,7 @@ io.on('connection', (socket) => {
       username: currentUsername,
       text: cleanText,
       color: userColor,
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      timestamp: new Date().toISOString(),
       system: false
     };
 
@@ -186,7 +181,7 @@ io.on('connection', (socket) => {
           id: Date.now().toString() + Math.random().toString(36).substr(2, 4),
           system: true,
           text: `${user.username} left the room`,
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          timestamp: new Date().toISOString()
         };
 
         room.messages.push(leaveMsg);
