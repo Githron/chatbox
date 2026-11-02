@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ChatBox — Instant Group Chat</title>
+  <link rel="stylesheet" href="style.css">
+  <!-- FontAwesome Icons for clean UI -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <!-- Socket.io Client -->
+  <script src="/socket.io/socket.io.js"></script>
+</head>
+<body>
+
+  <!-- ================= JOIN / LOGIN SCREEN ================= -->
+  <div id="join-screen" class="screen active">
+    <div class="join-card">
+      <div class="brand">
+        <div class="brand-icon">
+          <i class="fa-solid fa-comments"></i>
+        </div>
+        <h1>ChatBox</h1>
+        <p>Instant group chat. No account or login required.</p>
+      </div>
+
+      <form id="join-form" onsubmit="event.preventDefault(); joinRoom();">
+        <div id="join-error" class="error-banner hidden"></div>
+
+        <div class="form-group">
+          <label for="room-code-input">
+            <i class="fa-solid fa-hashtag"></i> Room Code
+          </label>
+          <div class="input-with-action">
+            <input
+              type="text"
+              id="room-code-input"
+              placeholder="e.g. LOBBY101"
+              maxlength="20"
+              required
+              autocomplete="off"
+            >
+            <button type="button" class="btn-secondary" onclick="generateRandomCode()" title="Generate Random Room Code">
+              <i class="fa-solid fa-dice"></i>
+            </button>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="username-input">
+            <i class="fa-solid fa-user"></i> Choose Username
+          </label>
+          <input
+            type="text"
+            id="username-input"
+            placeholder="e.g. Alex"
+            maxlength="25"
+            required
+            autocomplete="off"
+          >
+        </div>
+
+        <button type="submit" class="btn-primary">
+          <span>Join Chat Room</span>
+          <i class="fa-solid fa-arrow-right"></i>
+        </button>
+      </form>
+
+      <div class="join-footer">
+        <p><i class="fa-solid fa-lock"></i> Share the room code with anyone to chat together instantly.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= MAIN CHAT SCREEN ================= -->
+  <div id="chat-screen" class="screen">
+
+    <!-- Sidebar / User List -->
+    <aside id="sidebar" class="sidebar">
+      <div class="sidebar-header">
+        <h3><i class="fa-solid fa-users"></i> Online (<span id="user-count">0</span>)</h3>
+        <button class="icon-btn mobile-only" onclick="toggleSidebar()" title="Close user list">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+      <div class="user-list-container">
+        <ul id="user-list" class="user-list"></ul>
+      </div>
+      <div class="sidebar-footer">
+        <div class="user-me-badge">
+          <div id="my-avatar" class="avatar-sm"></div>
+          <span id="my-username-display">Username</span>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Overlay for mobile sidebar -->
+    <div id="sidebar-overlay" class="sidebar-overlay" onclick="toggleSidebar()"></div>
+
+    <!-- Main Chat Container -->
+    <main class="chat-main">
+
+      <!-- Top Header Bar -->
+      <header class="chat-header">
+        <div class="header-left">
+          <button class="icon-btn mobile-only" onclick="toggleSidebar()" title="View users">
+            <i class="fa-solid fa-users"></i>
+          </button>
+          <div class="room-info">
+            <h2>Room: <span id="current-room-display">------</span></h2>
+            <span class="status-indicator">
+              <span class="dot"></span> Live
+            </span>
+          </div>
+        </div>
+
+        <div class="header-right">
+          <button class="btn-action" onclick="copyRoomCode()" title="Copy Room Code">
+            <i class="fa-regular fa-copy"></i>
+            <span class="btn-text">Copy Code</span>
+          </button>
+          <button class="btn-action" onclick="copyShareLink()" title="Copy Room Link">
+            <i class="fa-solid fa-share-nodes"></i>
+            <span class="btn-text">Share Link</span>
+          </button>
+          <button class="btn-danger" onclick="leaveRoom()" title="Leave Room">
+            <i class="fa-solid fa-right-from-bracket"></i>
+            <span class="btn-text">Leave</span>
+          </button>
+        </div>
+      </header>
+
+      <!-- Message Container -->
+      <div id="messages-container" class="messages-container">
+        <div id="messages-list" class="messages-list"></div>
+        <div id="typing-indicator" class="typing-indicator hidden">
+          <div class="dots">
+            <span></span><span></span><span></span>
+          </div>
+          <span id="typing-text">Someone is typing...</span>
+        </div>
+      </div>
+
+      <!-- Quick Scroll to Bottom Button -->
+      <button id="scroll-bottom-btn" class="scroll-bottom-btn hidden" onclick="scrollToBottom(true)">
+        <i class="fa-solid fa-arrow-down"></i>
+      </button>
+
+      <!-- Message Input Bar -->
+      <footer class="chat-input-bar">
+        <form id="message-form" onsubmit="event.preventDefault(); sendMessage();">
+          <div class="input-wrapper">
+            <input
+              type="text"
+              id="message-input"
+              placeholder="Type a message..."
+              autocomplete="off"
+              maxlength="1000"
+            >
+            <button type="submit" class="send-btn" id="send-btn" title="Send Message">
+              <i class="fa-solid fa-paper-plane"></i>
+            </button>
+          </div>
+        </form>
+      </footer>
+
+    </main>
+
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div id="toast-container" class="toast-container"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
