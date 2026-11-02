@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>ChatBox — Instant Group Chat</title>
   <link rel="stylesheet" href="style.css">
   <!-- FontAwesome Icons for clean UI -->
@@ -102,11 +102,12 @@
       <!-- Top Header Bar -->
       <header class="chat-header">
         <div class="header-left">
-          <button class="icon-btn mobile-only" onclick="toggleSidebar()" title="View users">
+          <button class="users-toggle-btn mobile-only" onclick="toggleSidebar()" title="View online users">
             <i class="fa-solid fa-users"></i>
+            <span id="mobile-user-count" class="user-count-badge">0</span>
           </button>
           <div class="room-info">
-            <h2>Room: <span id="current-room-display">------</span></h2>
+            <h2><span class="room-label">Room:</span> <span id="current-room-display">------</span></h2>
             <span class="status-indicator">
               <span class="dot"></span> Live
             </span>

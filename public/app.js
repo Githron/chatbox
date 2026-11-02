@@ -30,6 +30,7 @@ const scrollBottomBtn = document.getElementById('scroll-bottom-btn');
 
 const userList = document.getElementById('user-list');
 const userCount = document.getElementById('user-count');
+const mobileUserCount = document.getElementById('mobile-user-count');
 const myAvatar = document.getElementById('my-avatar');
 const myUsernameDisplay = document.getElementById('my-username-display');
 const sidebar = document.getElementById('sidebar');
@@ -200,7 +201,11 @@ socket.on('user-typing', ({ username, isTyping: typing }) => {
 // Update User List Sidebar
 function updateUserList(users) {
   if (!users) return;
+
+  // Update both desktop sidebar count and mobile header count
   userCount.textContent = users.length;
+  if(mobileUserCount) mobileUserCount.textContent = users.length;
+
   userList.innerHTML = '';
 
   users.forEach(u => {
@@ -270,7 +275,7 @@ function copyShareLink() {
   if (!currentRoom) return;
   const link = `${window.location.origin}${window.location.pathname}#${currentRoom}`;
   navigator.clipboard.writeText(link).then(() => {
-    showToast('Direct room link copied to clipboard!');
+    showToast('Room link copied!');
   });
 }
 
@@ -303,7 +308,7 @@ function showError(msg) {
 }
 
 function hideError() {
-  joinError.classList.add('hidden');
+  joinError.classList.remove('hidden');
 }
 
 function showToast(text) {
