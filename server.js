@@ -67,6 +67,47 @@ function generateUserColor(username) {
 
 const activeRooms = new Map();
 
+// Periodically delete room-history files older than 7 days so the data/
+// directory does not grow without bound. Runs once on startup and then
+// every 24 hours. Never touches files for rooms that are currently active.
+const CLEANUP_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+const CLEANUP_INTERVAL_MS = 24 * 60 * 60 * 1000;
+
+async function cleanupOldRoomFiles() {
+  let entries;
+  try {
+    entries = await fs.readdir(DATA_DIR);
+  } catch (err) {
+    console.error('❌ Cleanup: could not read data directory:', err);
+    return;
+  }
+
+  const now = Date.now();
+  let deleted = 0;
+  for (const fileName of entries) {
+    if (!fileName.endsWith('.json')) continue;
+    const roomCode = fileName.replace(/\.json$/, '');
+    if (activeRooms.has(roomCode)) continue; // don't delete an active room's file
+    const filePath = path.join(DATA_DIR, fileName);
+    try {
+      const stat = await fs.stat(filePath);
+      if (now - stat.mtimeMs > CLEANUP_AGE_MS) {
+        await fs.unlink(filePath);
+        MEMORY_CACHE.delete(roomCode);
+        deleted++;
+      }
+    } catch (err) {
+      if (err.code !== 'ENOENT') console.error('❌ Cleanup: could not process', fileName, err);
+    }
+  }
+  if (deleted > 0) console.log(`🧹 Cleanup: removed ${deleted} room-history file(s) older than 7 days`);
+}
+
+// First run is delayed so browsers can auto-reconnect and mark their rooms
+// active before any file is considered for deletion.
+setTimeout(cleanupOldRoomFiles, 30000);
+setInterval(cleanupOldRoomFiles, CLEANUP_INTERVAL_MS);
+
 io.on('connection', (socket) => {
   let currentRoom = null;
   let currentUsername = null;

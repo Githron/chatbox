@@ -1,0 +1,14 @@
+# ChatBox .gitignore
+
+# Room history is stored locally as one JSON file per room code.
+# It is created at runtime and should never be committed.
+data/
+
+# Local server run log
+*.log
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

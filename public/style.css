@@ -26,6 +26,10 @@
   --radius-lg: 18px;
   --radius-full: 9999px;
 
+  /* Dynamically set by app.js from visualViewport so the layout shrinks with
+     the on-screen keyboard instead of being clipped off-screen. */
+  --vh: 100vh;
+
   --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
   --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -1px rgba(0, 0, 0, 0.1);
   --shadow-lg: 0 10px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.3);
@@ -41,8 +45,7 @@ body {
   font-family: var(--font-family);
   background-color: var(--bg-primary);
   color: var(--text-main);
-  height: 100vh;
-  height: 100dvh;
+  height: var(--vh);
   width: 100vw;
   overflow: hidden;
   line-height: 1.5;
@@ -52,8 +55,7 @@ body {
 .screen {
   display: none;
   width: 100%;
-  height: 100%;
-  height: 100dvh;
+  height: var(--vh);
 }
 
 .screen.active {
@@ -782,7 +784,7 @@ input[type="text"]:focus {
   background: var(--bg-tertiary);
 }
 
-.input-wrapper input[type="text"] {
+.input-wrapper textarea {
   flex: 1;
   background: transparent;
   border: none;
@@ -790,6 +792,13 @@ input[type="text"]:focus {
   font-size: 15px;
   outline: none;
   padding: 8px 0;
+  resize: none;
+  overflow-y: auto;
+  max-height: 120px;
+  line-height: 1.4;
+  font-family: inherit;
+  white-space: pre-wrap;
+  word-wrap: break-word;
 }
 
 .send-btn {

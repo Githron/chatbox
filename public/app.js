@@ -44,6 +44,27 @@ const myUsernameDisplay = document.getElementById('my-username-display');
 const sidebar = document.getElementById('sidebar');
 const sidebarOverlay = document.getElementById('sidebar-overlay');
 
+// Mobile keyboard handling: size the layout to the *visual* viewport so the
+// input bar stays just above the on-screen keyboard instead of being clipped.
+// Falls back to window.innerHeight when visualViewport is unavailable.
+function updateVh() {
+  const vh = (window.visualViewport ? window.visualViewport.height : window.innerHeight);
+  document.documentElement.style.setProperty('--vh', vh + 'px');
+}
+if (window.visualViewport) {
+  window.visualViewport.addEventListener('resize', updateVh);
+  window.visualViewport.addEventListener('scroll', updateVh);
+} else {
+  window.addEventListener('resize', updateVh);
+}
+updateVh();
+
+// Auto-grow the message textarea as the user types (up to max-height)
+function autoGrow() {
+  messageInput.style.height = 'auto';
+  messageInput.style.height = Math.min(messageInput.scrollHeight, 120) + 'px';
+}
+
 // Emit typing events as the user types (debounced), stop on send/blur/timeout
 function startTyping() {
   if (isTyping || !currentRoom) return;
@@ -59,15 +80,24 @@ messageInput.addEventListener('input', () => {
   if (!currentRoom) return;
   if (messageInput.value.trim().length > 0) startTyping();
   else stopTyping();
+  autoGrow();
 });
 messageInput.addEventListener('blur', stopTyping);
 messageInput.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter' && !e.shiftKey) stopTyping();
+  // Enter inserts a newline; the Send button submits the form
+  if (e.key !== 'Enter') return;
+  e.preventDefault();
+  const start = messageInput.selectionStart;
+  const end = messageInput.selectionEnd;
+  messageInput.setRangeText('\n', start, end, 'end');
+  autoGrow();
 });
 
 // Initialization
 window.addEventListener('DOMContentLoaded', () => {
   console.log("🚀 App Initialized");
+
+  autoGrow();
 
   const urlParams = new URLSearchParams(window.location.search);
   const roomFromHash = window.location.hash.replace('#', '');
@@ -181,6 +211,7 @@ function sendMessage() {
 
   socket.emit('send-message', { text });
   messageInput.value = '';
+  autoGrow();
   stopTyping();
 }
 

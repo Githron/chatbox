@@ -54,3 +54,16 @@ http://localhost:3000
 2. **Type your Username** (e.g., `Alex`, `Sam`).
 3. Click **Join Chat Room**.
 4. Share the **Room Code** or click **Share Link** to invite anyone to your group chat!
+
+---
+
+## 📂 Data Storage
+Chat history is saved locally so people who join later can see recent messages. Each room gets its own file in `data/` (e.g. `data/LOBBY123.json`), capped at the last 300 messages per room.
+
+These files are created at runtime and are **not** part of the repository — they're ignored by git and meant to live on the machine running the server. Old room files are automatically deleted after 7 days.
+
+## 🛠️ Tech Stack
+- **Backend:** Node.js + Express 4 + Socket.IO 4 (real-time WebSocket chat)
+- **Frontend:** Vanilla HTML / CSS / JavaScript (no build step)
+- **Persistence:** One JSON file per room, with an in-memory cache
+- **Icons:** FontAwesome 6.5.1 (CDN)
