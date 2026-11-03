@@ -39,7 +39,7 @@ const myUsernameDisplay = document.getElementById('my-username-display');
 const sidebar = document.getElementById('sidebar');
 const sidebarOverlay = document.getElementById('sidebar-overlay');
 
-// Check URL params / Hash on load to prefill room code
+// Check URL params / Hash on load to prefill room code & auto-reconnect if saved
 window.addEventListener('DOMContentLoaded', () => {
   const urlParams = new URLSearchParams(window.location.search);
   const roomFromQuery = urlParams.get('room');
@@ -48,10 +48,26 @@ window.addEventListener('DOMContentLoaded', () => {
   const targetRoom = roomFromQuery || roomFromHash;
   if (targetRoom) {
     roomInput.value = targetRoom.toUpperCase();
-    usernameInput.focus();
   } else {
-    // Generate a default random code for quick start
     generateRandomCode();
+  }
+
+  // Check if we have a saved session in localStorage
+  const savedRoom = localStorage.getItem('chatbox_room');
+  const savedUser = localStorage.getItem('chatbox_username');
+
+  if (savedRoom && savedUser) {
+    // If the URL has a specific room hash, prefer that, otherwise use saved room
+    const roomToJoin = targetRoom ? targetRoom.toUpperCase() : savedRoom;
+    roomInput.value = roomToJoin;
+    usernameInput.value = savedUser;
+
+    // Automatically attempt to rejoin the room
+    setTimeout(() => {
+      joinRoom(true); // true indicates auto-reconnect
+    }, 100);
+  } else if (targetRoom) {
+    usernameInput.focus();
   }
 });
 
@@ -66,12 +82,14 @@ function generateRandomCode() {
 }
 
 // Join Room Handler
-function joinRoom() {
+function joinRoom(isAutoReconnect = false) {
   const roomCode = roomInput.value.trim().toUpperCase();
   const username = usernameInput.value.trim();
 
   if (!roomCode || !username) {
-    showError('Please enter both room code and username.');
+    if (!isAutoReconnect) {
+      showError('Please enter both room code and username.');
+    }
     return;
   }
 
@@ -82,6 +100,10 @@ function joinRoom() {
       currentRoom = response.roomCode;
       myUsername = response.username;
       myColor = response.userColor;
+
+      // Save to localStorage for persistence across page refreshes
+      localStorage.setItem('chatbox_room', currentRoom);
+      localStorage.setItem('chatbox_username', myUsername);
 
       // Update UI state
       currentRoomDisplay.textContent = currentRoom;
@@ -106,9 +128,18 @@ function joinRoom() {
 
       scrollToBottom(false);
       messageInput.focus();
-      showToast(`Joined room ${currentRoom}`);
+
+      if (!isAutoReconnect) {
+        showToast(`Joined room ${currentRoom}`);
+      }
     } else {
-      showError(response.error || 'Failed to join room.');
+      // If auto-reconnect fails (e.g. username taken because old socket hasn't cleared yet), clear storage
+      if (isAutoReconnect) {
+        localStorage.removeItem('chatbox_room');
+        localStorage.removeItem('chatbox_username');
+      } else {
+        showError(response.error || 'Failed to join room.');
+      }
     }
   });
 }
@@ -185,6 +216,10 @@ function leaveRoom() {
     myUsername = null;
     selectedFile = null;
   }
+
+  // Clear saved session data
+  localStorage.removeItem('chatbox_room');
+  localStorage.removeItem('chatbox_username');
 
   // Clear URL hash
   window.history.pushState(null, '', window.location.pathname);
