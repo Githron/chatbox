@@ -24,6 +24,7 @@ const currentRoomDisplay = document.getElementById('current-room-display');
 const messagesContainer = document.getElementById('messages-container');
 const messagesList = document.getElementById('messages-list');
 const messageInput = document.getElementById('message-input');
+const fileInput = document.getElementById('file-input');
 const typingIndicator = document.getElementById('typing-indicator');
 const typingText = document.getElementById('typing-text');
 const scrollBottomBtn = document.getElementById('scroll-bottom-btn');
@@ -110,7 +111,7 @@ function joinRoom() {
   });
 }
 
-// Send Message
+// Send Text Message
 function sendMessage() {
   const text = messageInput.value.trim();
   if (!text || !currentRoom) return;
@@ -118,6 +119,48 @@ function sendMessage() {
   socket.emit('send-message', { text });
   messageInput.value = '';
   stopTyping();
+}
+
+// Trigger File Picker Dialog
+function triggerFileUpload() {
+  if (!currentRoom) return;
+  fileInput.click();
+}
+
+// Handle Selected File / Photo
+function handleFileSelected(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  // Limit file size to 5MB to ensure fast WebSocket transfer and memory safety
+  const MAX_SIZE = 5 * 1024 * 1024;
+  if (file.size > MAX_SIZE) {
+    showToast('File is too large! Maximum size is 5MB.');
+    fileInput.value = '';
+    return;
+  }
+
+  const reader = new FileReader();
+  showToast(`Uploading ${file.name}...`);
+
+  reader.onload = function(e) {
+    const fileData = {
+      name: file.name,
+      size: formatFileSize(file.size),
+      type: file.type,
+      dataUrl: e.target.result
+    };
+
+    socket.emit('send-file', fileData);
+    fileInput.value = ''; // Reset input
+  };
+
+  reader.onerror = function() {
+    showToast('Failed to read file.');
+    fileInput.value = '';
+  };
+
+  reader.readAsDataURL(file);
 }
 
 // Leave Room
@@ -144,7 +187,14 @@ function formatTime(isoString) {
   return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
-// Render Message
+// Helper: Format File Size
+function formatFileSize(bytes) {
+  if (bytes < 1024) return bytes + ' B';
+  else if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+  else return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
+// Render Message (Text, Image, File, or System)
 function renderMessage(msg) {
   const timestamp = formatTime(msg.timestamp);
 
@@ -167,6 +217,24 @@ function renderMessage(msg) {
 
     const authorHtml = !isSelf ? `<span class="message-author" style="color: ${msg.color}">${escapeHTML(msg.username)}</span>` : '';
 
+    let contentHtml = '';
+
+    if (msg.type === 'image') {
+      contentHtml = `<img src="${msg.dataUrl}" alt="${escapeHTML(msg.fileName)}" class="message-image" onclick="window.open('${msg.dataUrl}', '_blank')" title="Click to view full image">`;
+    } else if (msg.type === 'file') {
+      contentHtml = `
+        <a href="${msg.dataUrl}" download="${escapeHTML(msg.fileName)}" class="message-file-card" target="_blank" title="Download file">
+          <i class="fa-solid fa-file-arrow-down"></i>
+          <div class="file-info">
+            <span class="file-name">${escapeHTML(msg.fileName)}</span>
+            <span class="file-size">${msg.fileSize}</span>
+          </div>
+        </a>
+      `;
+    } else {
+      contentHtml = `<div class="message-text">${escapeHTML(msg.text)}</div>`;
+    }
+
     bubble.innerHTML = `
       ${avatarHtml}
       <div class="message-content">
@@ -174,7 +242,7 @@ function renderMessage(msg) {
           ${authorHtml}
           <span class="message-time">${timestamp}</span>
         </div>
-        <div class="message-text">${escapeHTML(msg.text)}</div>
+        ${contentHtml}
       </div>
     `;
 
@@ -210,7 +278,6 @@ socket.on('user-typing', ({ username, isTyping: typing }) => {
 function updateUserList(users) {
   if (!users) return;
 
-  // Update both desktop sidebar count and mobile header count
   userCount.textContent = users.length;
   if(mobileUserCount) mobileUserCount.textContent = users.length;
 

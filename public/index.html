@@ -148,8 +148,14 @@
 
       <!-- Message Input Bar -->
       <footer class="chat-input-bar">
+        <!-- Hidden file input -->
+        <input type="file" id="file-input" class="hidden-file-input" onchange="handleFileSelected(event)">
+
         <form id="message-form" onsubmit="event.preventDefault(); sendMessage();">
           <div class="input-wrapper">
+            <button type="button" class="attach-btn" onclick="triggerFileUpload()" title="Attach photo or file">
+              <i class="fa-solid fa-paperclip"></i>
+            </button>
             <input
               type="text"
               id="message-input"

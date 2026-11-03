@@ -9,7 +9,8 @@ const io = new Server(server, {
   cors: {
     origin: "*",
     methods: ["GET", "POST"]
-  }
+  },
+  maxHttpBufferSize: 10 * 1024 * 1024 // Allow up to 10MB payloads for file uploads
 });
 
 const PORT = process.env.PORT || 3000;
@@ -87,7 +88,7 @@ io.on('connection', (socket) => {
     socket.userRoomInfo = { roomCode: cleanRoomCode, username: cleanUsername, color: userColor };
     room.users.set(socket.id, { username: cleanUsername, color: userColor });
 
-    // Create a system join message (timestamp generated on client or via ISO)
+    // Create a system join message
     const joinMessage = {
       id: Date.now().toString() + Math.random().toString(36).substr(2, 4),
       system: true,
@@ -137,7 +138,8 @@ io.on('connection', (socket) => {
       text: cleanText,
       color: userColor,
       timestamp: new Date().toISOString(),
-      system: false
+      system: false,
+      type: 'text'
     };
 
     // Store message
@@ -145,6 +147,38 @@ io.on('connection', (socket) => {
     if (room.messages.length > 200) room.messages.shift();
 
     // Broadcast message to room
+    io.to(currentRoom).emit('new-message', messageObj);
+  });
+
+  // Handle sending files and photos
+  socket.on('send-file', (fileData) => {
+    if (!currentRoom || !currentUsername || !fileData || !fileData.dataUrl) return;
+
+    const room = rooms.get(currentRoom);
+    if (!room) return;
+
+    const user = room.users.get(socket.id);
+    const userColor = user ? user.color : '#4F46E5';
+
+    const isImage = fileData.type && fileData.type.startsWith('image/');
+
+    const messageObj = {
+      id: Date.now().toString() + Math.random().toString(36).substr(2, 4),
+      username: currentUsername,
+      color: userColor,
+      timestamp: new Date().toISOString(),
+      system: false,
+      type: isImage ? 'image' : 'file',
+      fileName: fileData.name || 'attachment',
+      fileSize: fileData.size || '',
+      dataUrl: fileData.dataUrl
+    };
+
+    // Store message
+    room.messages.push(messageObj);
+    if (room.messages.length > 200) room.messages.shift();
+
+    // Broadcast file/image to room
     io.to(currentRoom).emit('new-message', messageObj);
   });
 

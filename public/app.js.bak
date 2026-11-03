@@ -138,12 +138,20 @@ function leaveRoom() {
   showToast('Left room');
 }
 
+// Helper: Format Timestamp to Local User Time
+function formatTime(isoString) {
+  const date = new Date(isoString);
+  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
 // Render Message
 function renderMessage(msg) {
+  const timestamp = formatTime(msg.timestamp);
+
   if (msg.system) {
     const sysDiv = document.createElement('div');
     sysDiv.className = 'system-message';
-    sysDiv.innerHTML = `<span>${escapeHTML(msg.text)} • ${msg.timestamp}</span>`;
+    sysDiv.innerHTML = `<span>${escapeHTML(msg.text)} • ${timestamp}</span>`;
     messagesList.appendChild(sysDiv);
   } else {
     const isSelf = msg.username.toLowerCase() === myUsername?.toLowerCase();
@@ -164,7 +172,7 @@ function renderMessage(msg) {
       <div class="message-content">
         <div class="message-header">
           ${authorHtml}
-          <span class="message-time">${msg.timestamp}</span>
+          <span class="message-time">${timestamp}</span>
         </div>
         <div class="message-text">${escapeHTML(msg.text)}</div>
       </div>
@@ -308,7 +316,7 @@ function showError(msg) {
 }
 
 function hideError() {
-  joinError.classList.remove('hidden');
+  joinError.classList.add('hidden');
 }
 
 function showToast(text) {

@@ -312,7 +312,7 @@ input[type="text"]:focus {
   height: 100%;
   position: relative;
   background: var(--bg-primary);
-  min-width: 0; /* Prevents overflow flex issues */
+  min-width: 0;
 }
 
 /* Chat Header */
@@ -548,6 +548,65 @@ input[type="text"]:focus {
   border-top-left-radius: 2px;
 }
 
+/* Image Attachment Styling */
+.message-image {
+  max-width: 260px;
+  max-height: 220px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  object-fit: cover;
+  display: block;
+  transition: transform 0.2s;
+  border: 1px solid var(--border-color);
+}
+
+.message-image:hover {
+  transform: scale(1.02);
+}
+
+/* File Attachment Styling */
+.message-file-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--bg-tertiary);
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-color);
+  max-width: 280px;
+  text-decoration: none;
+  color: var(--text-main);
+  transition: background-color 0.2s;
+}
+
+.message-file-card:hover {
+  background: #475569;
+}
+
+.message-file-card i {
+  font-size: 24px;
+  color: var(--accent-primary);
+}
+
+.file-info {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.file-name {
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.file-size {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
 /* Typing Indicator */
 .typing-indicator {
   margin-top: 10px;
@@ -610,11 +669,15 @@ input[type="text"]:focus {
   transform: translateY(10px);
 }
 
-/* Chat Input Bar */
+/* Chat Input Bar & Attachments */
 .chat-input-bar {
   padding: 12px 14px;
   background: var(--bg-secondary);
   border-top: 1px solid var(--border-color);
+}
+
+.hidden-file-input {
+  display: none;
 }
 
 .input-wrapper {
@@ -624,7 +687,7 @@ input[type="text"]:focus {
   background: var(--bg-primary);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-full);
-  padding: 4px 6px 4px 14px;
+  padding: 4px 6px 4px 10px;
   transition: border-color 0.2s;
 }
 
@@ -632,7 +695,26 @@ input[type="text"]:focus {
   border-color: var(--accent-primary);
 }
 
-.input-wrapper input {
+.attach-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 18px;
+  cursor: pointer;
+  padding: 8px;
+  border-radius: var(--radius-full);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.2s, background-color 0.2s;
+}
+
+.attach-btn:hover {
+  color: var(--text-main);
+  background: var(--bg-tertiary);
+}
+
+.input-wrapper input[type="text"] {
   flex: 1;
   background: transparent;
   border: none;
@@ -713,11 +795,11 @@ input[type="text"]:focus {
   }
 
   .room-label {
-    display: none; /* Hide "Room:" label on mobile to save horizontal space */
+    display: none;
   }
 
   .btn-text {
-    display: none; /* Hide button text, show clean icon buttons */
+    display: none;
   }
 
   .btn-action, .btn-danger {
