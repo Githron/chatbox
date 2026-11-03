@@ -28,10 +28,22 @@ initDataDir();
 
 app.use(express.static(path.join(__dirname, 'public')));
 
+// A room code is 1-20 chars of [A-Z0-9_-] after trimming + uppercasing.
+// Anything else is rejected upstream so it can never become a junk filename.
+const ROOM_CODE_RE = /^[A-Z0-9_-]{1,20}$/;
+
+function isValidRoomCode(code) {
+  return typeof code === 'string' && ROOM_CODE_RE.test(code.trim().toUpperCase());
+}
+
+// Map a validated room code to its on-disk filename (defense in depth).
+function safeRoomFileName(roomCode) {
+  return roomCode.replace(/[^a-zA-Z0-9_-]/g, '_') + '.json';
+}
+
 async function getRoomHistory(roomCode) {
   if (MEMORY_CACHE.has(roomCode)) return MEMORY_CACHE.get(roomCode);
-  const safeCode = roomCode.replace(/[^a-zA-Z0-9_-]/g, '_');
-  const filePath = path.join(DATA_DIR, `${safeCode}.json`);
+  const filePath = path.join(DATA_DIR, safeRoomFileName(roomCode));
   try {
     const data = await fs.readFile(filePath, 'utf8');
     const history = JSON.parse(data);
@@ -47,8 +59,7 @@ async function updateRoomHistory(roomCode, newMsg) {
   history.push(newMsg);
   if (history.length > 300) history.shift();
   MEMORY_CACHE.set(roomCode, history);
-  const safeCode = roomCode.replace(/[^a-zA-Z0-9_-]/g, '_');
-  const filePath = path.join(DATA_DIR, `${safeCode}.json`);
+  const filePath = path.join(DATA_DIR, safeRoomFileName(roomCode));
   try {
     await fs.writeFile(filePath, JSON.stringify(history, null, 2));
   } catch (err) {
@@ -124,6 +135,10 @@ io.on('connection', (socket) => {
       const cleanRoomCode = roomCode.trim().toUpperCase();
       const cleanUsername = username.trim();
 
+      if (!isValidRoomCode(cleanRoomCode)) {
+        return callback({ success: false, error: 'Invalid room code' });
+      }
+
       if (!activeRooms.has(cleanRoomCode)) {
         activeRooms.set(cleanRoomCode, { users: new Map(), typing: new Set() });
       }
@@ -158,6 +173,18 @@ io.on('connection', (socket) => {
       io.to(cleanRoomCode).emit('user-list-update', Array.from(room.users.values()));
 
       console.log(`✅ ${cleanUsername} joined ${cleanRoomCode}`);
+    });
+
+    socket.on('leave-room', () => {
+      leaveCurrentRoom(socket);
+      // Broadcast that the user left the room
+      io.to(currentRoom).emit('new-message', {
+        id: Date.now().toString() + Math.random().toString(36).substr(2, 4),
+        system: true,
+        text: `${currentUsername} left the room`,
+        timestamp: new Date().toISOString()
+      });
+    });
 
       callback({
         success: true,
