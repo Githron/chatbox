@@ -267,5 +267,47 @@
     "timestamp": "2026-11-03T13:41:12.083Z",
     "system": false,
     "type": "text"
+  },
+  {
+    "id": "1793713633529ftgr",
+    "system": true,
+    "text": "Rakg joined the room",
+    "timestamp": "2026-11-03T13:47:13.529Z"
+  },
+  {
+    "id": "1793713811099wfke",
+    "username": "Rakg",
+    "text": "This is just a test",
+    "color": "hsl(59, 70%, 60%)",
+    "timestamp": "2026-11-03T13:50:11.099Z",
+    "system": false,
+    "type": "text"
+  },
+  {
+    "id": "17937139475639sne",
+    "system": true,
+    "text": "jzjjsjsks joined the room",
+    "timestamp": "2026-11-03T13:52:27.563Z"
+  },
+  {
+    "id": "17937140073637je0",
+    "system": true,
+    "text": "Ranger joined the room",
+    "timestamp": "2026-11-03T13:53:27.363Z"
+  },
+  {
+    "id": "1793714012479zehc",
+    "username": "Ranger",
+    "text": "Nzjzjjs",
+    "color": "hsl(339, 70%, 60%)",
+    "timestamp": "2026-11-03T13:53:32.479Z",
+    "system": false,
+    "type": "text"
+  },
+  {
+    "id": "1793714033779fdpb",
+    "system": true,
+    "text": "Shhshsh joined the room",
+    "timestamp": "2026-11-03T13:53:53.779Z"
   }
 ]

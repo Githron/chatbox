@@ -281,7 +281,7 @@ function renderMessage(msg) {
 
     let contentHtml = '';
     if (msg.type === 'image') {
-      contentHtml = `<img src="${msg.dataUrl}" class="message-image" onclick="window.open('${msg.dataUrl}', '_blank')">`;
+      contentHtml = `<img src="${msg.dataUrl}" class="message-image" data-url="${escapeAttr(msg.dataUrl)}" data-name="${escapeAttr(msg.fileName || 'image')}" alt="Image" onclick="openImageModal(this)">`;
     } else if (msg.type === 'file') {
       contentHtml = `<a href="${msg.dataUrl}" download="${escapeHTML(msg.fileName)}" class="message-file-card"><i class="fa-solid fa-file"></i><div class="file-info"><span class="file-name">${escapeHTML(msg.fileName)}</span><span class="file-size">${msg.fileSize}</span></div></a>`;
     } else {
@@ -317,6 +317,26 @@ function scrollToBottom(smooth = true) {
 function setAvatar(el, name, color) { el.style.backgroundColor = color; el.textContent = getInitials(name); }
 function getInitials(n) { return n ? n.trim().slice(0, 2).toUpperCase() : '?'; }
 function escapeHTML(s) { const p = document.createElement('p'); p.textContent = s; return p.innerHTML; }
+function escapeAttr(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+
+// Image modal / lightbox
+function openImageModal(img) {
+  const url = img.getAttribute('data-url');
+  const name = img.getAttribute('data-name') || 'image';
+  if (!url) return;
+  document.getElementById('image-modal-img').src = url;
+  const dl = document.getElementById('image-modal-download');
+  dl.href = url;
+  dl.download = name;
+  document.getElementById('image-modal').classList.remove('hidden');
+}
+function closeImageModal() {
+  document.getElementById('image-modal').classList.add('hidden');
+  document.getElementById('image-modal-img').src = '';
+}
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closeImageModal();
+});
 function showError(m) { joinError.textContent = m; joinError.classList.remove('hidden'); }
 function hideError() { joinError.classList.add('hidden'); }
 function showToast(t) {

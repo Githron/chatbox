@@ -177,6 +177,19 @@
   <!-- Toast Notification Container -->
   <div id="toast-container" class="toast-container"></div>
 
+  <!-- Image Modal / Lightbox -->
+  <div id="image-modal" class="image-modal hidden" onclick="closeImageModal()">
+    <div class="image-modal-content">
+      <button class="image-modal-close" onclick="closeImageModal()" title="Close (Esc)">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+      <img id="image-modal-img" class="image-modal-img" alt="Full size image">
+      <a id="image-modal-download" class="image-modal-download" download>
+        <i class="fa-solid fa-download"></i> Download
+      </a>
+    </div>
+  </div>
+
   <script src="app.js"></script>
 </body>
 </html>

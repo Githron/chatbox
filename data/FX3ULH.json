@@ -1,0 +1,17 @@
+[
+  {
+    "id": "17937138613009fqh",
+    "system": true,
+    "text": "Ranger joined the room",
+    "timestamp": "2026-11-03T13:51:01.300Z"
+  },
+  {
+    "id": "1793713863544cvqf",
+    "username": "Ranger",
+    "text": "Jejjejejs",
+    "color": "hsl(339, 70%, 60%)",
+    "timestamp": "2026-11-03T13:51:03.544Z",
+    "system": false,
+    "type": "text"
+  }
+]
