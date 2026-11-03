@@ -84,7 +84,7 @@ io.on('connection', (socket) => {
       const cleanUsername = username.trim();
 
       if (!activeRooms.has(cleanRoomCode)) {
-        activeRooms.set(cleanRoomCode, { users: new Map() });
+        activeRooms.set(cleanRoomCode, { users: new Map(), typing: new Set() });
       }
       const room = activeRooms.get(cleanRoomCode);
 
@@ -178,6 +178,27 @@ io.on('connection', (socket) => {
     io.to(currentRoom).emit('new-message', messageObj);
   });
 
+  // Typing indicator: track who is typing per room and relay the list to others.
+  // Auto-stops after a timeout so a dropped event never leaves someone "typing" forever.
+  socket.on('typing', ({ isTyping }) => {
+    if (!currentRoom) return;
+    const room = activeRooms.get(currentRoom);
+    if (!room) return;
+    if (isTyping) {
+      room.typing.add(currentUsername);
+      if (room._typingTimeout) clearTimeout(room._typingTimeout);
+      room._typingTimeout = setTimeout(() => {
+        room.typing.delete(currentUsername);
+        io.to(currentRoom).emit('user-typing', Array.from(room.typing));
+      }, 5000);
+    } else {
+      room.typing.delete(currentUsername);
+      if (room._typingTimeout) clearTimeout(room._typingTimeout);
+    }
+    // Broadcast the full list; each client hides its own name when rendering
+    io.to(currentRoom).emit('user-typing', Array.from(room.typing));
+  });
+
   socket.on('disconnect', () => {
     console.log(`🔌 Disconnected: ${socket.id}`);
     leaveCurrentRoom(socket);
@@ -193,6 +214,11 @@ io.on('connection', (socket) => {
         // We keep the history in MEMORY_CACHE and on disk
       } else {
         io.to(currentRoom).emit('user-list-update', Array.from(room.users.values()));
+        // A departing user should not linger as "typing"
+        room.typing.delete(currentUsername);
+        if (room._typingTimeout) clearTimeout(room._typingTimeout);
+        const list = Array.from(room.typing).filter(u => u !== currentUsername);
+        io.to(currentRoom).emit('user-typing', list);
       }
     }
     sock.leave(currentRoom);

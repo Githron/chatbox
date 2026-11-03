@@ -13,6 +13,10 @@ let isTyping = false;
 let isUserAtBottom = true;
 let selectedFile = null;
 
+// Typing indicators: track who is currently typing (excluding ourselves)
+const typingUsers = new Set();
+const TYPING_TIMEOUT_MS = 5000;
+
 // DOM Elements
 const joinScreen = document.getElementById('join-screen');
 const chatScreen = document.getElementById('chat-screen');
@@ -39,6 +43,27 @@ const myAvatar = document.getElementById('my-avatar');
 const myUsernameDisplay = document.getElementById('my-username-display');
 const sidebar = document.getElementById('sidebar');
 const sidebarOverlay = document.getElementById('sidebar-overlay');
+
+// Emit typing events as the user types (debounced), stop on send/blur/timeout
+function startTyping() {
+  if (isTyping || !currentRoom) return;
+  isTyping = true;
+  socket.emit('typing', { isTyping: true });
+}
+function stopTyping() {
+  if (!isTyping) return;
+  isTyping = false;
+  socket.emit('typing', { isTyping: false });
+}
+messageInput.addEventListener('input', () => {
+  if (!currentRoom) return;
+  if (messageInput.value.trim().length > 0) startTyping();
+  else stopTyping();
+});
+messageInput.addEventListener('blur', stopTyping);
+messageInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) stopTyping();
+});
 
 // Initialization
 window.addEventListener('DOMContentLoaded', () => {
@@ -210,14 +235,27 @@ document.addEventListener('click', (e) => {
 socket.on('new-message', (msg) => renderMessage(msg));
 socket.on('user-list-update', (users) => updateUserList(users));
 
-socket.on('user-typing', ({ username, isTyping: typing }) => {
-  if (typing) {
-    typingText.textContent = `${username} is typing...`;
-    typingIndicator.classList.remove('hidden');
-  } else {
-    typingIndicator.classList.add('hidden');
-  }
+// Server sends the full list of typing usernames; we hide our own name
+socket.on('user-typing', (typingUsernames) => {
+  typingUsers.clear();
+  (typingUsernames || []).forEach((u) => typingUsers.add(u));
+  renderTypingIndicator();
 });
+
+function renderTypingIndicator() {
+  const names = Array.from(typingUsers).filter((u) => u !== myUsername);
+  if (names.length === 0) {
+    typingIndicator.classList.add('hidden');
+    typingText.textContent = 'Someone is typing...';
+    return;
+  }
+  let label;
+  if (names.length === 1) label = `${names[0]} is typing...`;
+  else if (names.length === 2) label = `${names[0]} and ${names[1]} are typing...`;
+  else label = `${names[0]}, ${names[1]} and ${names.length - 2} others are typing...`;
+  typingText.textContent = label;
+  typingIndicator.classList.remove('hidden');
+}
 
 socket.on('connect_error', (err) => {
   console.error("🔌 Socket Connection Error:", err);
@@ -294,4 +332,3 @@ function formatFileSize(b) {
   if (b < 1048576) return (b / 1024).toFixed(1) + ' KB';
   return (b / 1048576).toFixed(1) + ' MB';
 }
-function stopTyping() { isTyping = false; socket.emit('typing', { isTyping: false }); }
