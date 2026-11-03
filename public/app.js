@@ -11,6 +11,7 @@ let myColor = '#6366F1';
 let typingTimeout = null;
 let isTyping = false;
 let isUserAtBottom = true;
+let selectedFile = null; // Store pending file
 
 // DOM Elements
 const joinScreen = document.getElementById('join-screen');
@@ -25,6 +26,7 @@ const messagesContainer = document.getElementById('messages-container');
 const messagesList = document.getElementById('messages-list');
 const messageInput = document.getElementById('message-input');
 const fileInput = document.getElementById('file-input');
+const sendBtn = document.getElementById('send-btn');
 const typingIndicator = document.getElementById('typing-indicator');
 const typingText = document.getElementById('typing-text');
 const scrollBottomBtn = document.getElementById('scroll-bottom-btn');
@@ -111,8 +113,27 @@ function joinRoom() {
   });
 }
 
-// Send Text Message
+// Send Action (Text or Pending File)
 function sendMessage() {
+  // If a file is selected, send the file
+  if (selectedFile) {
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      const fileData = {
+        name: selectedFile.name,
+        size: formatFileSize(selectedFile.size),
+        type: selectedFile.type,
+        dataUrl: e.target.result
+      };
+      socket.emit('send-file', fileData);
+      selectedFile = null;
+      updateInputPlaceholder();
+    };
+    reader.readAsDataURL(selectedFile);
+    return;
+  }
+
+  // Otherwise, send text
   const text = messageInput.value.trim();
   if (!text || !currentRoom) return;
 
@@ -121,18 +142,29 @@ function sendMessage() {
   stopTyping();
 }
 
+// Update Placeholder if file pending
+function updateInputPlaceholder() {
+  if (selectedFile) {
+    messageInput.placeholder = `Attachment: ${selectedFile.name}`;
+    messageInput.style.fontStyle = 'italic';
+  } else {
+    messageInput.placeholder = 'Type a message...';
+    messageInput.style.fontStyle = 'normal';
+  }
+}
+
 // Trigger File Picker Dialog
 function triggerFileUpload() {
   if (!currentRoom) return;
   fileInput.click();
 }
 
-// Handle Selected File / Photo
+// Handle Selected File / Photo (Now just stages it)
 function handleFileSelected(event) {
   const file = event.target.files[0];
   if (!file) return;
 
-  // Limit file size to 5MB to ensure fast WebSocket transfer and memory safety
+  // Limit file size to 5MB
   const MAX_SIZE = 5 * 1024 * 1024;
   if (file.size > MAX_SIZE) {
     showToast('File is too large! Maximum size is 5MB.');
@@ -140,27 +172,9 @@ function handleFileSelected(event) {
     return;
   }
 
-  const reader = new FileReader();
-  showToast(`Uploading ${file.name}...`);
-
-  reader.onload = function(e) {
-    const fileData = {
-      name: file.name,
-      size: formatFileSize(file.size),
-      type: file.type,
-      dataUrl: e.target.result
-    };
-
-    socket.emit('send-file', fileData);
-    fileInput.value = ''; // Reset input
-  };
-
-  reader.onerror = function() {
-    showToast('Failed to read file.');
-    fileInput.value = '';
-  };
-
-  reader.readAsDataURL(file);
+  selectedFile = file;
+  updateInputPlaceholder();
+  showToast(`Attached ${file.name}. Click send.`);
 }
 
 // Leave Room
@@ -169,6 +183,7 @@ function leaveRoom() {
     socket.emit('leave-room');
     currentRoom = null;
     myUsername = null;
+    selectedFile = null;
   }
 
   // Clear URL hash
