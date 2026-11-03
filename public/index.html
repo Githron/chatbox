@@ -78,7 +78,7 @@
     <aside id="sidebar" class="sidebar">
       <div class="sidebar-header">
         <h3><i class="fa-solid fa-users"></i> Online (<span id="user-count">0</span>)</h3>
-        <button class="icon-btn mobile-only" onclick="toggleSidebar()" title="Close user list">
+        <button class="icon-btn mobile-only" title="Close user list">
           <i class="fa-solid fa-xmark"></i>
         </button>
       </div>
@@ -94,7 +94,7 @@
     </aside>
 
     <!-- Overlay for mobile sidebar -->
-    <div id="sidebar-overlay" class="sidebar-overlay" onclick="toggleSidebar()"></div>
+    <div id="sidebar-overlay" class="sidebar-overlay"></div>
 
     <!-- Main Chat Container -->
     <main class="chat-main">
@@ -102,7 +102,7 @@
       <!-- Top Header Bar -->
       <header class="chat-header">
         <div class="header-left">
-          <button class="users-toggle-btn mobile-only" onclick="toggleSidebar()" title="View online users">
+          <button class="users-toggle-btn mobile-only" title="View online users">
             <i class="fa-solid fa-users"></i>
             <span id="mobile-user-count" class="user-count-badge">0</span>
           </button>

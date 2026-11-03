@@ -11,7 +11,7 @@ let myColor = '#6366F1';
 let typingTimeout = null;
 let isTyping = false;
 let isUserAtBottom = true;
-let selectedFile = null; // Store pending file
+let selectedFile = null;
 
 // DOM Elements
 const joinScreen = document.getElementById('join-screen');
@@ -20,6 +20,7 @@ const joinForm = document.getElementById('join-form');
 const roomInput = document.getElementById('room-code-input');
 const usernameInput = document.getElementById('username-input');
 const joinError = document.getElementById('join-error');
+const joinBtn = document.querySelector('#join-form button[type="submit"]');
 
 const currentRoomDisplay = document.getElementById('current-room-display');
 const messagesContainer = document.getElementById('messages-container');
@@ -39,124 +40,110 @@ const myUsernameDisplay = document.getElementById('my-username-display');
 const sidebar = document.getElementById('sidebar');
 const sidebarOverlay = document.getElementById('sidebar-overlay');
 
-// Check URL params / Hash on load to prefill room code & auto-reconnect if saved
+// Initialization
 window.addEventListener('DOMContentLoaded', () => {
+  console.log("🚀 App Initialized");
+
   const urlParams = new URLSearchParams(window.location.search);
-  const roomFromQuery = urlParams.get('room');
   const roomFromHash = window.location.hash.replace('#', '');
+  const targetRoom = (urlParams.get('room') || roomFromHash || '').toUpperCase();
 
-  const targetRoom = roomFromQuery || roomFromHash;
-  if (targetRoom) {
-    roomInput.value = targetRoom.toUpperCase();
-  } else {
-    generateRandomCode();
-  }
+  if (targetRoom) roomInput.value = targetRoom;
+  else generateRandomCode();
 
-  // Check if we have a saved session in localStorage
+  // Handle stored session
   const savedRoom = localStorage.getItem('chatbox_room');
   const savedUser = localStorage.getItem('chatbox_username');
 
   if (savedRoom && savedUser) {
-    // If the URL has a specific room hash, prefer that, otherwise use saved room
-    const roomToJoin = targetRoom ? targetRoom.toUpperCase() : savedRoom;
-    roomInput.value = roomToJoin;
+    console.log("♻️ Attempting auto-reconnect...");
+    roomInput.value = targetRoom || savedRoom;
     usernameInput.value = savedUser;
 
-    // Automatically attempt to rejoin the room
-    setTimeout(() => {
-      joinRoom(true); // true indicates auto-reconnect
-    }, 100);
+    if (socket.connected) {
+      joinRoom(true);
+    } else {
+      socket.once('connect', () => joinRoom(true));
+    }
   } else if (targetRoom) {
     usernameInput.focus();
   }
 });
 
-// Generate Random Room Code
 function generateRandomCode() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   let code = '';
-  for (let i = 0; i < 6; i++) {
-    code += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
+  for (let i = 0; i < 6; i++) code += chars.charAt(Math.floor(Math.random() * chars.length));
   roomInput.value = code;
 }
 
-// Join Room Handler
+// JOIN ROOM
 function joinRoom(isAutoReconnect = false) {
   const roomCode = roomInput.value.trim().toUpperCase();
   const username = usernameInput.value.trim();
 
   if (!roomCode || !username) {
-    if (!isAutoReconnect) {
-      showError('Please enter both room code and username.');
-    }
+    if (!isAutoReconnect) showError('Room code and username required.');
     return;
   }
 
-  hideError();
+  if (joinBtn) {
+    joinBtn.disabled = true;
+    joinBtn.querySelector('span').textContent = 'Joining...';
+  }
 
   socket.emit('join-room', { roomCode, username }, (response) => {
+    if (joinBtn) {
+      joinBtn.disabled = false;
+      joinBtn.querySelector('span').textContent = 'Join Chat Room';
+    }
+
     if (response && response.success) {
       currentRoom = response.roomCode;
       myUsername = response.username;
       myColor = response.userColor;
 
-      // Save to localStorage for persistence across page refreshes
       localStorage.setItem('chatbox_room', currentRoom);
       localStorage.setItem('chatbox_username', myUsername);
 
-      // Update UI state
       currentRoomDisplay.textContent = currentRoom;
       myUsernameDisplay.textContent = myUsername;
       setAvatar(myAvatar, myUsername, myColor);
 
-      // Render room history
       messagesList.innerHTML = '';
-      if (response.history && response.history.length > 0) {
+      if (response.history) {
         response.history.forEach(msg => renderMessage(msg));
       }
 
-      // Update users
       updateUserList(response.users);
-
-      // Update URL hash without reload
       window.history.pushState(null, '', `#${currentRoom}`);
-
-      // Switch screens
       joinScreen.classList.remove('active');
       chatScreen.classList.add('active');
 
       scrollToBottom(false);
       messageInput.focus();
-
-      if (!isAutoReconnect) {
-        showToast(`Joined room ${currentRoom}`);
-      }
+      if (!isAutoReconnect) showToast(`Welcome to ${currentRoom}!`);
     } else {
-      // If auto-reconnect fails (e.g. username taken because old socket hasn't cleared yet), clear storage
       if (isAutoReconnect) {
         localStorage.removeItem('chatbox_room');
         localStorage.removeItem('chatbox_username');
       } else {
-        showError(response.error || 'Failed to join room.');
+        showError(response?.error || 'Could not join room.');
       }
     }
   });
 }
 
-// Send Action (Text or Pending File)
 function sendMessage() {
-  // If a file is selected, send the file
   if (selectedFile) {
     const reader = new FileReader();
-    reader.onload = function(e) {
-      const fileData = {
+    reader.onload = (e) => {
+      socket.emit('send-file', {
         name: selectedFile.name,
         size: formatFileSize(selectedFile.size),
         type: selectedFile.type,
         dataUrl: e.target.result
-      };
-      socket.emit('send-file', fileData);
+      });
       selectedFile = null;
       updateInputPlaceholder();
     };
@@ -164,7 +151,6 @@ function sendMessage() {
     return;
   }
 
-  // Otherwise, send text
   const text = messageInput.value.trim();
   if (!text || !currentRoom) return;
 
@@ -173,10 +159,20 @@ function sendMessage() {
   stopTyping();
 }
 
-// Update Placeholder if file pending
+function triggerFileUpload() { if (currentRoom) fileInput.click(); }
+
+function handleFileSelected(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  if (file.size > 5 * 1024 * 1024) return showToast('File too large (Max 5MB)');
+  selectedFile = file;
+  updateInputPlaceholder();
+  showToast(`Staged: ${file.name}`);
+}
+
 function updateInputPlaceholder() {
   if (selectedFile) {
-    messageInput.placeholder = `Attachment: ${selectedFile.name}`;
+    messageInput.placeholder = `📎 Send: ${selectedFile.name}`;
     messageInput.style.fontStyle = 'italic';
   } else {
     messageInput.placeholder = 'Type a message...';
@@ -184,136 +180,35 @@ function updateInputPlaceholder() {
   }
 }
 
-// Trigger File Picker Dialog
-function triggerFileUpload() {
-  if (!currentRoom) return;
-  fileInput.click();
-}
-
-// Handle Selected File / Photo (Now just stages it)
-function handleFileSelected(event) {
-  const file = event.target.files[0];
-  if (!file) return;
-
-  // Limit file size to 5MB
-  const MAX_SIZE = 5 * 1024 * 1024;
-  if (file.size > MAX_SIZE) {
-    showToast('File is too large! Maximum size is 5MB.');
-    fileInput.value = '';
-    return;
-  }
-
-  selectedFile = file;
-  updateInputPlaceholder();
-  showToast(`Attached ${file.name}. Click send.`);
-}
-
-// Leave Room
 function leaveRoom() {
-  if (currentRoom) {
-    socket.emit('leave-room');
-    currentRoom = null;
-    myUsername = null;
-    selectedFile = null;
-  }
-
-  // Clear saved session data
+  socket.emit('leave-room');
+  currentRoom = null;
+  myUsername = null;
   localStorage.removeItem('chatbox_room');
   localStorage.removeItem('chatbox_username');
-
-  // Clear URL hash
   window.history.pushState(null, '', window.location.pathname);
-
-  // Switch screens
   chatScreen.classList.remove('active');
   joinScreen.classList.add('active');
-  hideError();
-  showToast('Left room');
+  showToast('Logged out');
 }
 
-// Helper: Format Timestamp to Local User Time
-function formatTime(isoString) {
-  const date = new Date(isoString);
-  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-}
-
-// Helper: Format File Size
-function formatFileSize(bytes) {
-  if (bytes < 1024) return bytes + ' B';
-  else if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
-  else return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
-}
-
-// Render Message (Text, Image, File, or System)
-function renderMessage(msg) {
-  const timestamp = formatTime(msg.timestamp);
-
-  if (msg.system) {
-    const sysDiv = document.createElement('div');
-    sysDiv.className = 'system-message';
-    sysDiv.innerHTML = `<span>${escapeHTML(msg.text)} • ${timestamp}</span>`;
-    messagesList.appendChild(sysDiv);
-  } else {
-    const isSelf = msg.username.toLowerCase() === myUsername?.toLowerCase();
-
-    const bubble = document.createElement('div');
-    bubble.className = `message-bubble ${isSelf ? 'self' : 'other'}`;
-
-    const avatarHtml = !isSelf ? `
-      <div class="avatar-sm" style="background-color: ${msg.color || '#6366F1'};">
-        ${getInitials(msg.username)}
-      </div>
-    ` : '';
-
-    const authorHtml = !isSelf ? `<span class="message-author" style="color: ${msg.color}">${escapeHTML(msg.username)}</span>` : '';
-
-    let contentHtml = '';
-
-    if (msg.type === 'image') {
-      contentHtml = `<img src="${msg.dataUrl}" alt="${escapeHTML(msg.fileName)}" class="message-image" onclick="window.open('${msg.dataUrl}', '_blank')" title="Click to view full image">`;
-    } else if (msg.type === 'file') {
-      contentHtml = `
-        <a href="${msg.dataUrl}" download="${escapeHTML(msg.fileName)}" class="message-file-card" target="_blank" title="Download file">
-          <i class="fa-solid fa-file-arrow-down"></i>
-          <div class="file-info">
-            <span class="file-name">${escapeHTML(msg.fileName)}</span>
-            <span class="file-size">${msg.fileSize}</span>
-          </div>
-        </a>
-      `;
-    } else {
-      contentHtml = `<div class="message-text">${escapeHTML(msg.text)}</div>`;
-    }
-
-    bubble.innerHTML = `
-      ${avatarHtml}
-      <div class="message-content">
-        <div class="message-header">
-          ${authorHtml}
-          <span class="message-time">${timestamp}</span>
-        </div>
-        ${contentHtml}
-      </div>
-    `;
-
-    messagesList.appendChild(bubble);
-  }
-
-  if (isUserAtBottom) {
-    scrollToBottom(true);
-  } else {
-    scrollBottomBtn.classList.remove('hidden');
+function toggleSidebar() {
+  if (sidebar && sidebarOverlay) {
+    sidebar.classList.toggle('open');
+    sidebarOverlay.classList.toggle('active');
   }
 }
 
-// Socket Event Listeners
-socket.on('new-message', (msg) => {
-  renderMessage(msg);
+// Attach event listeners to overlay and mobile buttons if they exist
+document.addEventListener('click', (e) => {
+  if (e.target.closest('.users-toggle-btn') || e.target.id === 'sidebar-overlay' || e.target.closest('.sidebar-header .icon-btn')) {
+    toggleSidebar();
+  }
 });
 
-socket.on('user-list-update', (users) => {
-  updateUserList(users);
-});
+// SOCKET EVENTS
+socket.on('new-message', (msg) => renderMessage(msg));
+socket.on('user-list-update', (users) => updateUserList(users));
 
 socket.on('user-typing', ({ username, isTyping: typing }) => {
   if (typing) {
@@ -324,126 +219,79 @@ socket.on('user-typing', ({ username, isTyping: typing }) => {
   }
 });
 
-// Update User List Sidebar
+socket.on('connect_error', (err) => {
+  console.error("🔌 Socket Connection Error:", err);
+  showToast("Connection lost. Reconnecting...");
+});
+
+// UI HELPERS
+function renderMessage(msg) {
+  const timeStr = new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+  if (msg.system) {
+    const div = document.createElement('div');
+    div.className = 'system-message';
+    div.innerHTML = `<span>${escapeHTML(msg.text)} • ${timeStr}</span>`;
+    messagesList.appendChild(div);
+  } else {
+    const isSelf = msg.username.toLowerCase() === (myUsername || '').toLowerCase();
+    const bubble = document.createElement('div');
+    bubble.className = `message-bubble ${isSelf ? 'self' : 'other'}`;
+
+    const avatarHtml = !isSelf ? `<div class="avatar-sm" style="background-color: ${msg.color || '#6366F1'};">${getInitials(msg.username)}</div>` : '';
+    const authorHtml = !isSelf ? `<span class="message-author" style="color: ${msg.color}">${escapeHTML(msg.username)}</span>` : '';
+
+    let contentHtml = '';
+    if (msg.type === 'image') {
+      contentHtml = `<img src="${msg.dataUrl}" class="message-image" onclick="window.open('${msg.dataUrl}', '_blank')">`;
+    } else if (msg.type === 'file') {
+      contentHtml = `<a href="${msg.dataUrl}" download="${escapeHTML(msg.fileName)}" class="message-file-card"><i class="fa-solid fa-file"></i><div class="file-info"><span class="file-name">${escapeHTML(msg.fileName)}</span><span class="file-size">${msg.fileSize}</span></div></a>`;
+    } else {
+      contentHtml = `<div class="message-text">${escapeHTML(msg.text)}</div>`;
+    }
+
+    bubble.innerHTML = `${avatarHtml}<div class="message-content"><div class="message-header">${authorHtml}<span class="message-time">${timeStr}</span></div>${contentHtml}</div>`;
+    messagesList.appendChild(bubble);
+  }
+  if (isUserAtBottom) scrollToBottom(true);
+}
+
 function updateUserList(users) {
   if (!users) return;
-
   userCount.textContent = users.length;
   if(mobileUserCount) mobileUserCount.textContent = users.length;
-
   userList.innerHTML = '';
-
   users.forEach(u => {
     const li = document.createElement('li');
     li.className = 'user-item';
-    const isMe = u.username.toLowerCase() === myUsername?.toLowerCase();
-
-    li.innerHTML = `
-      <div class="avatar-sm" style="background-color: ${u.color}">
-        ${getInitials(u.username)}
-      </div>
-      <span>${escapeHTML(u.username)} ${isMe ? '(You)' : ''}</span>
-    `;
+    const isMe = u.username.toLowerCase() === (myUsername || '').toLowerCase();
+    li.innerHTML = `<div class="avatar-sm" style="background-color: ${u.color}">${getInitials(u.username)}</div><span>${escapeHTML(u.username)} ${isMe ? '(You)' : ''}</span>`;
     userList.appendChild(li);
   });
 }
 
-// Typing Indicator Handler
-messageInput.addEventListener('input', () => {
-  if (!isTyping) {
-    isTyping = true;
-    socket.emit('typing', { isTyping: true });
-  }
-
-  clearTimeout(typingTimeout);
-  typingTimeout = setTimeout(() => {
-    stopTyping();
-  }, 2000);
-});
-
-function stopTyping() {
-  if (isTyping) {
-    isTyping = false;
-    socket.emit('typing', { isTyping: false });
-  }
-}
-
-// Scroll Handling
-messagesContainer.addEventListener('scroll', () => {
-  const { scrollTop, scrollHeight, clientHeight } = messagesContainer;
-  const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
-  isUserAtBottom = distanceFromBottom < 50;
-
-  if (isUserAtBottom) {
-    scrollBottomBtn.classList.add('hidden');
-  }
-});
-
+// SHARED UTILS
 function scrollToBottom(smooth = true) {
-  messagesContainer.scrollTo({
-    top: messagesContainer.scrollHeight,
-    behavior: smooth ? 'smooth' : 'auto'
-  });
+  messagesContainer.scrollTo({ top: messagesContainer.scrollHeight, behavior: smooth ? 'smooth' : 'auto' });
   isUserAtBottom = true;
-  scrollBottomBtn.classList.add('hidden');
 }
 
-// Copy Utilities
-function copyRoomCode() {
-  if (!currentRoom) return;
-  navigator.clipboard.writeText(currentRoom).then(() => {
-    showToast(`Room code ${currentRoom} copied!`);
-  });
-}
-
-function copyShareLink() {
-  if (!currentRoom) return;
-  const link = `${window.location.origin}${window.location.pathname}#${currentRoom}`;
-  navigator.clipboard.writeText(link).then(() => {
-    showToast('Room link copied!');
-  });
-}
-
-// Mobile Sidebar Toggle
-function toggleSidebar() {
-  sidebar.classList.toggle('open');
-  sidebarOverlay.classList.toggle('active');
-}
-
-// Helpers
-function setAvatar(element, name, color) {
-  element.style.backgroundColor = color || '#6366F1';
-  element.textContent = getInitials(name);
-}
-
-function getInitials(name) {
-  if (!name) return '?';
-  return name.trim().slice(0, 2).toUpperCase();
-}
-
-function escapeHTML(str) {
-  const p = document.createElement('p');
-  p.textContent = str;
-  return p.innerHTML;
-}
-
-function showError(msg) {
-  joinError.textContent = msg;
-  joinError.classList.remove('hidden');
-}
-
-function hideError() {
-  joinError.classList.add('hidden');
-}
-
-function showToast(text) {
-  const toastContainer = document.getElementById('toast-container');
+function setAvatar(el, name, color) { el.style.backgroundColor = color; el.textContent = getInitials(name); }
+function getInitials(n) { return n ? n.trim().slice(0, 2).toUpperCase() : '?'; }
+function escapeHTML(s) { const p = document.createElement('p'); p.textContent = s; return p.innerHTML; }
+function showError(m) { joinError.textContent = m; joinError.classList.remove('hidden'); }
+function hideError() { joinError.classList.add('hidden'); }
+function showToast(t) {
+  const container = document.getElementById('toast-container');
   const toast = document.createElement('div');
   toast.className = 'toast';
-  toast.textContent = text;
-  toastContainer.appendChild(toast);
-
-  setTimeout(() => {
-    toast.remove();
-  }, 3000);
+  toast.textContent = t;
+  container.appendChild(toast);
+  setTimeout(() => toast.remove(), 3000);
 }
+function formatFileSize(b) {
+  if (b < 1024) return b + ' B';
+  if (b < 1048576) return (b / 1024).toFixed(1) + ' KB';
+  return (b / 1048576).toFixed(1) + ' MB';
+}
+function stopTyping() { isTyping = false; socket.emit('typing', { isTyping: false }); }
