@@ -173,18 +173,6 @@ io.on('connection', (socket) => {
       io.to(cleanRoomCode).emit('user-list-update', Array.from(room.users.values()));
 
       console.log(`✅ ${cleanUsername} joined ${cleanRoomCode}`);
-    });
-
-    socket.on('leave-room', () => {
-      leaveCurrentRoom(socket);
-      // Broadcast that the user left the room
-      io.to(currentRoom).emit('new-message', {
-        id: Date.now().toString() + Math.random().toString(36).substr(2, 4),
-        system: true,
-        text: `${currentUsername} left the room`,
-        timestamp: new Date().toISOString()
-      });
-    });
 
       callback({
         success: true,
@@ -198,6 +186,31 @@ io.on('connection', (socket) => {
       console.error('❌ Join Error:', err);
       callback({ success: false, error: 'Internal Server Error' });
     }
+  });
+
+  socket.on('leave-room', () => {
+    if (!currentRoom) return;
+    const room = activeRooms.get(currentRoom);
+    if (room) {
+      room.users.delete(socket.id);
+      if (room.users.size === 0) {
+        activeRooms.delete(currentRoom);
+      } else {
+        io.to(currentRoom).emit('user-list-update', Array.from(room.users.values()));
+      }
+      room.typing.delete(currentUsername);
+      if (room._typingTimeout) clearTimeout(room._typingTimeout);
+    }
+    socket.leave(currentRoom);
+    console.log(`👋 ${currentUsername} left ${currentRoom}`);
+    io.to(currentRoom).emit('new-message', {
+      id: Date.now().toString() + Math.random().toString(36).substr(2, 4),
+      system: true,
+      text: `${currentUsername} left the room`,
+      timestamp: new Date().toISOString()
+    });
+    currentRoom = null;
+    currentUsername = null;
   });
 
   socket.on('send-message', async ({ text }) => {
