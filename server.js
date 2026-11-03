@@ -1,6 +1,7 @@
 const express = require('express');
 const http = require('http');
 const path = require('path');
+const fs = require('fs');
 const { Server } = require('socket.io');
 
 const app = express();
@@ -18,8 +19,49 @@ const PORT = process.env.PORT || 3000;
 // Serve static assets from 'public' folder
 app.use(express.static(path.join(__dirname, 'public')));
 
-// In-memory data store for active rooms
-const rooms = new Map();
+// Data directory for persistent room history
+const DATA_DIR = path.join(__dirname, 'data');
+if (!fs.existsSync(DATA_DIR)) {
+  fs.mkdirSync(DATA_DIR, { recursive: true });
+}
+
+// In-memory data store for active users per room
+// Format:
+// activeRooms.set(roomCode, { users: Map(socket.id -> { username, color }) })
+const activeRooms = new Map();
+
+// Helper to get room data file path
+function getRoomFilePath(roomCode) {
+  // Sanitize room code to prevent directory traversal
+  const safeCode = roomCode.replace(/[^a-zA-Z0-9_-]/g, '_');
+  return path.join(DATA_DIR, `${safeCode}.json`);
+}
+
+// Load room messages from disk
+function loadRoomMessages(roomCode) {
+  try {
+    const filePath = getRoomFilePath(roomCode);
+    if (fs.existsSync(filePath)) {
+      const data = fs.readFileSync(filePath, 'utf8');
+      return JSON.parse(data);
+    }
+  } catch (err) {
+    console.error(`Error loading history for room ${roomCode}:`, err);
+  }
+  return [];
+}
+
+// Save room messages to disk
+function saveRoomMessages(roomCode, messages) {
+  try {
+    const filePath = getRoomFilePath(roomCode);
+    // Keep last 300 messages max to save disk space
+    const trimmed = messages.slice(-300);
+    fs.writeFileSync(filePath, JSON.stringify(trimmed, null, 2), 'utf8');
+  } catch (err) {
+    console.error(`Error saving history for room ${roomCode}:`, err);
+  }
+}
 
 // Helper to generate pastel user color based on username
 function generateUserColor(username) {
@@ -59,17 +101,16 @@ io.on('connection', (socket) => {
       leaveCurrentRoom(socket);
     }
 
-    // Initialize room if it doesn't exist
-    if (!rooms.has(cleanRoomCode)) {
-      rooms.set(cleanRoomCode, {
-        users: new Map(),
-        messages: []
+    // Initialize active room if not present in memory
+    if (!activeRooms.has(cleanRoomCode)) {
+      activeRooms.set(cleanRoomCode, {
+        users: new Map()
       });
     }
 
-    const room = rooms.get(cleanRoomCode);
+    const room = activeRooms.get(cleanRoomCode);
 
-    // Check if username is already taken in this room
+    // Check if username is already taken in this room by an active user
     const existingUsers = Array.from(room.users.values()).map(u => u.username.toLowerCase());
     if (existingUsers.includes(cleanUsername.toLowerCase())) {
       if (typeof callback === 'function') {
@@ -88,6 +129,9 @@ io.on('connection', (socket) => {
     socket.userRoomInfo = { roomCode: cleanRoomCode, username: cleanUsername, color: userColor };
     room.users.set(socket.id, { username: cleanUsername, color: userColor });
 
+    // Load persistent history from disk
+    const history = loadRoomMessages(cleanRoomCode);
+
     // Create a system join message
     const joinMessage = {
       id: Date.now().toString() + Math.random().toString(36).substr(2, 4),
@@ -96,9 +140,9 @@ io.on('connection', (socket) => {
       timestamp: new Date().toISOString()
     };
 
-    // Store in message history
-    room.messages.push(joinMessage);
-    if (room.messages.length > 200) room.messages.shift();
+    // Store and save persistent history
+    history.push(joinMessage);
+    saveRoomMessages(cleanRoomCode, history);
 
     // Broadcast system message to everyone in room
     io.to(cleanRoomCode).emit('new-message', joinMessage);
@@ -113,7 +157,7 @@ io.on('connection', (socket) => {
         roomCode: cleanRoomCode,
         username: cleanUsername,
         userColor: userColor,
-        history: room.messages,
+        history: history,
         users: userList
       });
     }
@@ -126,7 +170,7 @@ io.on('connection', (socket) => {
     const cleanText = text.trim();
     if (!cleanText) return;
 
-    const room = rooms.get(currentRoom);
+    const room = activeRooms.get(currentRoom);
     if (!room) return;
 
     const user = room.users.get(socket.id);
@@ -142,9 +186,10 @@ io.on('connection', (socket) => {
       type: 'text'
     };
 
-    // Store message
-    room.messages.push(messageObj);
-    if (room.messages.length > 200) room.messages.shift();
+    // Load, append, and save persistent history
+    const history = loadRoomMessages(currentRoom);
+    history.push(messageObj);
+    saveRoomMessages(currentRoom, history);
 
     // Broadcast message to room
     io.to(currentRoom).emit('new-message', messageObj);
@@ -154,7 +199,7 @@ io.on('connection', (socket) => {
   socket.on('send-file', (fileData) => {
     if (!currentRoom || !currentUsername || !fileData || !fileData.dataUrl) return;
 
-    const room = rooms.get(currentRoom);
+    const room = activeRooms.get(currentRoom);
     if (!room) return;
 
     const user = room.users.get(socket.id);
@@ -174,9 +219,10 @@ io.on('connection', (socket) => {
       dataUrl: fileData.dataUrl
     };
 
-    // Store message
-    room.messages.push(messageObj);
-    if (room.messages.length > 200) room.messages.shift();
+    // Load, append, and save persistent history
+    const history = loadRoomMessages(currentRoom);
+    history.push(messageObj);
+    saveRoomMessages(currentRoom, history);
 
     // Broadcast file/image to room
     io.to(currentRoom).emit('new-message', messageObj);
@@ -205,7 +251,7 @@ io.on('connection', (socket) => {
   function leaveCurrentRoom(sock) {
     if (!currentRoom) return;
 
-    const room = rooms.get(currentRoom);
+    const room = activeRooms.get(currentRoom);
     if (room) {
       const user = room.users.get(sock.id);
       room.users.delete(sock.id);
@@ -218,16 +264,18 @@ io.on('connection', (socket) => {
           timestamp: new Date().toISOString()
         };
 
-        room.messages.push(leaveMsg);
-        if (room.messages.length > 200) room.messages.shift();
+        // Load, append, and save persistent history
+        const history = loadRoomMessages(currentRoom);
+        history.push(leaveMsg);
+        saveRoomMessages(currentRoom, history);
 
         io.to(currentRoom).emit('new-message', leaveMsg);
         io.to(currentRoom).emit('user-list-update', Array.from(room.users.values()));
       }
 
-      // Cleanup room if empty
+      // Cleanup active room memory if empty (history stays safe on disk!)
       if (room.users.size === 0) {
-        rooms.delete(currentRoom);
+        activeRooms.delete(currentRoom);
       }
     }
 
