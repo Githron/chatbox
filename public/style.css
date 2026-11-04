@@ -45,6 +45,7 @@ body {
   font-family: var(--font-family);
   background-color: var(--bg-primary);
   color: var(--text-main);
+  height: 100dvh;
   height: var(--vh);
   width: 100vw;
   overflow: hidden;
@@ -55,6 +56,7 @@ body {
 .screen {
   display: none;
   width: 100%;
+  height: 100dvh;
   height: var(--vh);
 }
 
