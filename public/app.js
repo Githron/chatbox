@@ -99,6 +99,15 @@ messageInput.addEventListener('keydown', (e) => {
 let savedRoom = localStorage.getItem('chatbox_room');
 let savedUser = localStorage.getItem('chatbox_username');
 
+// Re-join the room whenever the socket reconnects (mobile browsers aggressively
+// close WebSocket connections when the page is backgrounded).
+socket.on('reconnect', () => {
+  if (savedRoom && savedUser) {
+    console.log("♻️ Socket reconnected — rejoining room...");
+    joinRoom(true);
+  }
+});
+
 // Track page visibility to handle reconnection smoothly
 let wasHidden = !document.hidden;
 document.addEventListener('visibilitychange', () => {
@@ -106,9 +115,14 @@ document.addEventListener('visibilitychange', () => {
     // Just came back to visible — try to reconnect / rejoin
     wasHidden = false;
     if (savedRoom && savedUser) {
+      // Wait briefly for socket.io to settle, then rejoin
       setTimeout(() => {
-        joinRoom(true);
-      }, 100); // small delay allows socket.io stable state
+        if (socket.connected) {
+          joinRoom(true);
+        } else {
+          socket.once('connect', () => joinRoom(true));
+        }
+      }, 500);
     }
   }
   wasHidden = document.hidden;
