@@ -93,6 +93,27 @@ messageInput.addEventListener('keydown', (e) => {
   autoGrow();
 });
 
+// Mobile reconnection handling: when page regains focus after being backgrounded,
+// the socket may need to be re-subscribed to ensure messages flow.
+// Also prevent connection issues when switching tabs/apps.
+let savedRoom = localStorage.getItem('chatbox_room');
+let savedUser = localStorage.getItem('chatbox_username');
+
+// Track page visibility to handle reconnection smoothly
+let wasHidden = !document.hidden;
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && wasHidden) {
+    // Just came back to visible — try to reconnect / rejoin
+    wasHidden = false;
+    if (savedRoom && savedUser) {
+      setTimeout(() => {
+        joinRoom(true);
+      }, 100); // small delay allows socket.io stable state
+    }
+  }
+  wasHidden = document.hidden;
+});
+
 // Initialization
 window.addEventListener('DOMContentLoaded', () => {
   console.log("🚀 App Initialized");
@@ -107,19 +128,16 @@ window.addEventListener('DOMContentLoaded', () => {
   else generateRandomCode();
 
   // Handle stored session
-  const savedRoom = localStorage.getItem('chatbox_room');
-  const savedUser = localStorage.getItem('chatbox_username');
-
   if (savedRoom && savedUser) {
     console.log("♻️ Attempting auto-reconnect...");
     roomInput.value = targetRoom || savedRoom;
     usernameInput.value = savedUser;
-
-    if (socket.connected) {
-      joinRoom(true);
-    } else {
-      socket.once('connect', () => joinRoom(true));
-    }
+    // Delay reconnect slightly to allow socket.io stable state
+    setTimeout(() => {
+      if (socket.connected) {
+        joinRoom(true);
+      }
+    }, 300);
   } else if (targetRoom) {
     usernameInput.focus();
   }
