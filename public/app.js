@@ -93,19 +93,52 @@ messageInput.addEventListener('keydown', (e) => {
   autoGrow();
 });
 
-// Mobile reconnection handling: when page regains focus after being backgrounded,
-// the socket may need to be re-subscribed to ensure messages flow.
-// Also prevent connection issues when switching tabs/apps.
+// Robust realtime reconnection for mobile browsers.
+//
+// Mobile browsers (Chrome/Safari) aggressively close WebSocket connections
+// when the page is backgrounded. On return, socket.io auto-reconnects but
+// the room state is not automatically restored. The handlers below ensure
+// the user is re-joined as soon as the socket is stable.
+//
 let savedRoom = localStorage.getItem('chatbox_room');
 let savedUser = localStorage.getItem('chatbox_username');
 
-// Re-join the room whenever the socket reconnects (mobile browsers aggressively
-// close WebSocket connections when the page is backgrounded).
+// — — — — — — — — — — — — — — — — — — — — — — — — — — — — — — — — — —
+// 1) Re‑join as soon as the socket re‑establishes a connection.
+//
+// This is the most reliable hook because socket.io fires 'reconnect' once
+// the transport is live again, before any application events are processed.
+//
+// — — — — — — — — — — — — — — — — — — — — — — — — — — — — — — — — — —
 socket.on('reconnect', () => {
   if (savedRoom && savedUser) {
     console.log("♻️ Socket reconnected — rejoining room...");
     joinRoom(true);
   }
+});
+
+// — — — — — — — — — — — — — — — — — — — — — — — — — — — — — — — — — —
+// 2) Re‑join when the page becomes visible again (some browsers don't fire
+//    a 'reconnect' event immediately, but do fire visibilitychange).
+//
+// — — — — — — — — — — — — — — — — — — — — — — — — — — — — — — — — — —
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && wasHidden) {
+    // Just returned to the foreground — wait a moment for socket.io stable state
+    // then re‑join if we have saved credentials.
+    wasHidden = false;
+    if (savedRoom && savedUser) {
+      setTimeout(() => {
+        if (socket.connected) {
+          joinRoom(true);
+        } else {
+          // socket not yet connected – wait for the 'connect' event
+          socket.once('connect', () => joinRoom(true));
+        }
+      }, 500);
+    }
+  }
+  wasHidden = document.hidden;
 });
 
 // Track page visibility to handle reconnection smoothly
